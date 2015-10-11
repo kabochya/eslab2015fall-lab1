@@ -3,78 +3,81 @@ var router = express.Router();
 var io = require('socket.io')();
 var sanitizeHtml = require('sanitize-html');
 
-var nedb = require('nedb'),
-    Posts = new nedb({ filename:'./data.db', autoload: true}),
-    Users = new nedb({ filename:'./user.db', autoload: true})
+var db = require('../db');
+var passport = require('passport');
+var authenticate = require('connect-ensure-login').ensureLoggedIn();
 
-/* GET home page. */
-router.get('/', function(req, res, next) {
-  res.render('index')
-})
-
-router.get('/posts',function(req,res,next){
-  Posts.find({}).sort({ time: 1 }).exec(function(err,posts){
-    console.log(posts);
-    res.json(posts)
+router.get('/',
+  authenticate,
+  function(req, res, next) {
+    res.render('index')
   })
-})
-
-router.post('/post',function(req,res,next){
-
-  var post = 
-  {
-    user: req.body.user,
-    message: sanitizeHtml(req.body.message),
-    emoji: req.body.emoji,
-    time: Date.now(),
-    hits:[]
-  }
-
-  var validate = validatePost(post)
-
-  if(!validate.status){
-    res.json(validate)
-    return
-  }
-
-  Posts.insert(post,function(err,doc){
-    if(err){
-      console.log(err)
-      validate.status = 0
-      validate.message = err
-    }
-    else{
-      console.log("New post: "+ doc)
-      io.emit('new post',doc)
-    }
-    res.json(validate)
+router.get('/user',
+  authenticate,
+  function(req,res,next){
+    res.json({user:req.user.user})
   })
-})
+router.get('/posts',
+  authenticate,
+  function(req,res,next){
+    db.posts.find({}).sort({ time: 1 }).exec(function(err,posts){
+      res.json(posts)
+    })
+  })
+router.post('/post',
+  authenticate,
+  function(req,res,next){
+    var post = 
+    {
+      user: req.user.user,
+      message: sanitizeHtml(req.body.message),
+      emoji: req.body.emoji,
+      time: Date.now(),
+      hits:[]
+    }
 
-router.put('/post/:id/user/:user/hit',function(req,res,next){
-  var id = req.params.id
-  var user = req.params.user
-  Posts.findOne({_id:id},function(err,doc){
-    if(err){
-      console.log(err)
-      res.json({status:0,message:err})
-      return
+    var validate = validatePost(post)
+
+    if(!validate.status){
+      return res.json(validate)
     }
-    else if(!doc){
-      res.json({status:0,message:"Post doesn't exist."})
-      return
-    }
-    else if(doc.hits.find( (e)=> e===user )){
-      res.json({status:0,message:"User already hit."})
-      return
-    }
-    Posts.update({_id:id},{$addToSet:{hits:user}},{},function(err,count){
+
+    db.posts.insert(post,function(err,doc){
       if(err){
         console.log(err)
-        res.json({status:0,message:err})
-        return
+        validate.status = 0
+        validate.message = err
       }
-      console.log(count)
+      else{
+        console.log("New post: "+ doc)
+        io.emit('new post',doc)
+      }
+      res.json(validate)
+    })
+  })
+
+router
+.route('/post/:id/user/:user/hit')
+.all(require('connect-ensure-login').ensureLoggedIn())
+.put(function(req,res,next){
+  var id = req.params.id
+  var user = req.user.user
+  db.posts.findOne({_id:id},function(err,doc){
+    if(err){
+      console.log(err)
+      return res.json({status:0,message:err})
+    }
+    else if(!doc){
+      return res.json({status:0,message:"Post doesn't exist."})
+    }
+    else if(doc.hits.find( (e)=> e===user )){
+      return res.json({status:0,message:"User already hit."})
+    }
+    db.posts.update({_id:id},{$addToSet:{hits:user}},{},function(err,count){
+      if(err){
+        console.log(err)
+        return res.json({status:0,message:err})
+      }
 
       res.json({status:1})
 
@@ -82,29 +85,24 @@ router.put('/post/:id/user/:user/hit',function(req,res,next){
     })
   })
 })
-
-router.delete('/post/:id/user/:user/hit',function(req,res,next){
+.delete(function(req,res,next){
   var id = req.params.id
-  var user = req.params.user
-  Posts.findOne({_id:id},function(err,doc){
+  var user = req.user.user
+  db.posts.findOne({_id:id},function(err,doc){
     if(err){
       console.log(err)
-      res.json({status:0,message:err})
-      return
+      return res.json({status:0,message:err})
     }
     else if(!doc){
-      res.json({status:0,message:"Post doesn't exist."})
-      return
+      return res.json({status:0,message:"Post doesn't exist."})
     }
     else if(!doc.hits.find( (e)=> e===user )){
-      res.json({status:0,message:"User hasn't hit yet."})
-      return
+      return res.json({status:0,message:"User hasn't hit yet."})
     }
-    Posts.update({_id:id},{$pull:{hits:user}},{},function(err,count){
+    db.posts.update({_id:id},{$pull:{hits:user}},{},function(err,count){
       if(err){
         console.log(err)
-        res.json({status:0,message:err})
-        return
+        return res.json({status:0,message:err})
       }
       res.json({status:1})
 
@@ -121,10 +119,7 @@ var validatePost = function(post){
   var ret = {
     status: 0
   }
-  if(!post.user.match(/^[a-z0-9]{3,10}$/)){
-    ret.message = "Invalid Username."
-  }
-  else if( !(post.emoji && post.emoji >= 0 && post.emoji <= 4) ){
+  if( !(post.emoji && post.emoji >= 0 && post.emoji <= 4) ){
     ret.message = "Invalid Emoji."
   }
   else if( post.message == ""){
