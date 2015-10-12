@@ -10,10 +10,9 @@ socket.on('connect',function(){
 var Post = React.createClass({
 	onHit: function() {
 		var hitList = this.props.postdata.hits;
-		var hitUrl = '/post/' + this.props.postdata._id + '/user/' + myUser + '/hit';
+		var hitUrl = '/post/' + this.props.postdata._id + '/hit';
 		var api = 'PUT';
 		for ( var i = 0; i < hitList.length; i++) {
-			console.log(hitList[i]);
 			if ( hitList[i] == myUser) {
 				api = 'DELETE';
 				break;
@@ -22,6 +21,8 @@ var Post = React.createClass({
 		$.ajax({
 			url: hitUrl,
 			type: api,
+		},function(data){
+			Redirect(data.status);
 		});
 	},
 
@@ -32,39 +33,50 @@ var Post = React.createClass({
 
 	render: function() {
 
-		var Slaps = this.props.postdata.hits.length + ' slaps';
+		
+		var Slaps = '';
+		if(this.props.postdata.hits.length === 0) Slaps += 'Be the first to slap this shit';
+		else {
+			Slaps += this.props.postdata.hits[0];
+			if(this.props.postdata.hits[1]) Slaps += ', ' + this.props.postdata.hits[1];
+			if(this.props.postdata.hits[2]) Slaps += ', ' + this.props.postdata.hits[1];
+			if(this.props.postdata.hits[3]) Slaps += ', and ' + ( this.props.postdata.hits.length - 3) + ' others';
+			Slaps += ' slapped this shit.';
+		}
 		var pTime = new Date(this.props.postdata.time);
 		var pYear = pTime.getFullYear();
-		var pMonth = pTime.getMonth();
+		var pMonth = pTime.getMonth()+1;
 		var pDate = pTime.getDate();
-		var pHour = pTime.getHours();
-		var pMinute = pTime.getMinutes();
-		var pSecond = pTime.getSeconds();
+		var pHour = ('0'+pTime.getHours()).slice(-2);
+		var pMinute = ('0'+pTime.getMinutes()).slice(-2);
+		var pSecond = ('0'+pTime.getSeconds()).slice(-2);
 		var Time = pYear + '/' + pMonth + '/' + pDate + ' ' + pHour + ':' + pMinute + ':' + pSecond;
 		var emoji = this.props.postdata.emoji;
 		
 		var Esrc = '';
 		if ( emoji == 1) {
-			Esrc = ('/public/images/emoji1')
+			Esrc = ('/images/emoji1.jpg')
 		} else if ( emoji == 2) {
-			Esrc = ('/public/images/emoji2')
+			Esrc = ('/images/emoji2.jpg')
 		} else if ( emoji == 3) {
-			Esrc = ('/public/images/emoji3')
+			Esrc = ('/images/emoji3.jpg')
 		} else if ( emoji == 4) {
-			Esrc = ('/public/images/emoji4')
+			Esrc = ('/images/emoji4.jpg')
+		} else if ( emoji == 0) {
+			Esrc = ('/images/emoji0.jpg')
 		};
 
 		return (
 			<div className="post">
-				<h2 className="postHeader">
-					{this.props.postdata.user}
-					<img src={Esrc} />
-				</h2>
-				<span>{Time}</span>
-				<span>{this.props.postdata.message}</span>
-				<button className="postHitButton" onClick={this.onHit} >{Slaps}</button>
+			<h4 className="postHeader">
+			{this.props.postdata.user}
+			<img src={Esrc} />
+			</h4>
+			<span>{this.props.postdata.message}</span><br/>
+			<span>{Time}</span>
+			<button className="postHitButton" onClick={this.onHit} >{Slaps}</button>
 			</div>
-		);
+			);
 	}
 });
 
@@ -77,17 +89,16 @@ var PostBox = React.createClass({
 			dataType: 'json',
 			cache: false,
 			success: function(data) {
+				Redirect(data.status);
 				this.setState({data: data});
-				console.log(this.state.data);
-			}.bind(this),
-			error: function(xhr, status, err) {
-				console.error(this.props.url+'/posts', status, err.toString());
 			}.bind(this)
 		});
 	},
 
 	handlePostSubmit: function(post) {
-		$.post('/post', post, function (data) { console.log(JSON.stringify(data)); }, "json");
+		$.post('/post', post, function (data) {
+			Redirect(data.status); 
+		}, "json");
 	},
 
 	getInitialState: function() {
@@ -105,9 +116,7 @@ var PostBox = React.createClass({
 
 			for ( var i = 0; i < newPosts.length; i++ ) {
 				if ( newPosts[i]._id === target ) {
-					console.log('aaaa');
 					newPosts[i].hits.push(h.user);
-					console.log(newPosts);
 					break;
 				}
 			}
@@ -128,77 +137,79 @@ var PostBox = React.createClass({
 		}.bind(this));
 	},
 	render: function() {
+		var you = 'you are ' + myUser + '.....';
 		return (
-			<div className="postBox">
+			<div className="postBox">{you}
+				<a href="/logout" >fuck off</a>
 				<h1>Talk Shit Get Hit</h1>
 				<PostForm onPostSubmit={this.handlePostSubmit} />
 				<PostList data={this.state.data} />
 			</div>
-		); 
+			); 
 	}
 });
 
 
 
 class PostList extends React.Component {
-//var PostList = React.createClass({
 	render() {
 		var postNodes = this.props.data.map( function(post) {
 			return (
 				<Post postdata={post} />
-			);
+				);
 		});
+		postNodes.reverse();	
 		return (
 			<div className="postList">
-				{postNodes}
+			{postNodes}
 			</div>
-		);
+			);
 	}
-//});
 }
-
-
 
 var PostForm = React.createClass({
 	handleSubmit: function(e) {
 		e.preventDefault();
-		var user = React.findDOMNode(this.refs.user).value.trim();
 		var message = React.findDOMNode(this.refs.message).value.trim();
 		var emoji = React.findDOMNode(this.refs.emoji).value.trim();
-		if (!message || !user) {
-			return;
-		}
-		this.props.onPostSubmit({
-									user: user,
-									message: message,
-									emoji: emoji
-								});
-		React.findDOMNode(this.refs.user).value = '';
-		React.findDOMNode(this.refs.message).value = '';
-		React.findDOMNode(this.refs.emoji).value = '';
+		if (!message) return;
 
-		myUser = user;
+		this.props.onPostSubmit({
+
+			message: message,
+			emoji: emoji
+		});
+		React.findDOMNode(this.refs.message).value = '';
 	},
 
 	render: function() {
 		return (
 			<form className="postForm" onSubmit={this.handleSubmit}>
-				<input type="text" placeholder="Your name" ref="user" />
-				<input type="text" placeholder="Talk Shit..." ref="message" />
-				<input type="text" placeholder="emoji..." ref="emoji" />
-				<input type="submit" value="Post" />
+			<input type="text" placeholder="Talk Shit..." ref="message" />
+			<select ref="emoji">
+				<option value="1" >daniel</option>
+				<option value="2" >pml</option>
+				<option value="3" >steve</option>
+				<option value="4" >david</option>
+				<option value="0" >jon</option>
+			</select>
+			<input type="submit" value="Post" />
 			</form>
-		);
+			);
 	}
 });
 
+$.get('/user', function (data) {
+	Redirect(data.status);
+	myUser = data.user;
+	React.render(
+		<PostBox pollInterval={2000} />,
+		document.getElementById('content')
+	);
+});
 
-
-
-
-
-
-React.render(
-	<PostBox pollInterval={2000} />,
-	document.getElementById('content')
-);
+function Redirect(status) {
+	if(status===-1){
+		window.location.href = '/login';
+	}
+}

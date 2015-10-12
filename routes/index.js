@@ -49,7 +49,6 @@ router.post('/post',
         validate.message = err
       }
       else{
-        console.log("New post: "+ doc)
         io.emit('new post',doc)
       }
       res.json(validate)
@@ -57,7 +56,7 @@ router.post('/post',
   })
 
 router
-.route('/post/:id/user/:user/hit')
+.route('/post/:id/hit')
 .all(require('connect-ensure-login').ensureLoggedIn())
 .put(function(req,res,next){
   var id = req.params.id
