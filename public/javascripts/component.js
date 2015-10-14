@@ -1,7 +1,7 @@
 var URL = 'http://localhost:3000';
 
 var socket = io.connect(URL);
-var myUser = 'GG';
+var myUser = '';
 
 socket.on('connect',function(){
 	console.log('CONNECTED');
@@ -72,7 +72,7 @@ var Post = React.createClass({
 			{this.props.postdata.user}
 			<img src={Esrc} />
 			</h4>
-			<span>{this.props.postdata.message}</span><br/>
+			{this.props.postdata.message}<br/>
 			<span>{Time}</span>
 			<button className="postHitButton" onClick={this.onHit} >{Slaps}</button>
 			</div>
@@ -100,15 +100,25 @@ var PostBox = React.createClass({
 			Redirect(data.status); 
 		}, "json");
 	},
+	handleSearch: function(srch) {
+		this.setState( {
+							data: this.state.data,
+							filter: srch
+						});
+	},
 
 	getInitialState: function() {
-		return {data: []};
+		return 	{
+					data: [],
+					filter: ''
+				};
 	},
+
 	componentDidMount: function() {
 		this.loadPostsFromServer();
 		socket.on('new post', function (post) {
 			var newPosts = this.state.data.concat([post]);
-			this.setState({data: newPosts});
+			this.setState({data: newPosts, filter:this.state.filter});
 		}.bind(this));
 		socket.on('hit', function (h) {
 			var target = h._id;
@@ -120,7 +130,7 @@ var PostBox = React.createClass({
 					break;
 				}
 			}
-			this.setState( {data: newPosts});
+			this.setState( {data: newPosts, filter:this.state.filter});
 		}.bind(this));
 		socket.on('unhit', function (h) { 
 			var target = h._id;
@@ -133,7 +143,7 @@ var PostBox = React.createClass({
 					break;
 				}
 			}
-			this.setState({data: newPosts});
+			this.setState({data: newPosts, filter:this.state.filter});
 		}.bind(this));
 	},
 	render: function() {
@@ -142,8 +152,8 @@ var PostBox = React.createClass({
 			<div className="postBox">{you}
 				<a href="/logout" >fuck off</a>
 				<h1>Talk Shit Get Hit</h1>
-				<PostForm onPostSubmit={this.handlePostSubmit} />
-				<PostList data={this.state.data} />
+				<PostForm onPostSubmit={this.handlePostSubmit} onSearch={this.handleSearch} />
+				<PostList filter={this.state.filter} data={this.state.data} />
 			</div>
 			); 
 	}
@@ -153,7 +163,12 @@ var PostBox = React.createClass({
 
 class PostList extends React.Component {
 	render() {
-		var postNodes = this.props.data.map( function(post) {
+		var allData = [];
+		for ( var i = 0; i < this.props.data.length; i++) {
+			if ( this.props.data[i].user.indexOf(this.props.filter) > -1 )
+				allData.push(this.props.data[i]);
+		} 
+		var postNodes = allData.map( function(post) {
 			return (
 				<Post postdata={post} />
 				);
@@ -181,9 +196,14 @@ var PostForm = React.createClass({
 		});
 		React.findDOMNode(this.refs.message).value = '';
 	},
+	Search: function () {
+		var search = React.findDOMNode(this.refs.search).value.trim();
+		this.props.onSearch(search);
+	},
 
 	render: function() {
 		return (
+			<div>
 			<form className="postForm" onSubmit={this.handleSubmit}>
 			<input type="text" placeholder="Talk Shit..." ref="message" />
 			<select ref="emoji">
@@ -195,7 +215,9 @@ var PostForm = React.createClass({
 			</select>
 			<input type="submit" value="Post" />
 			</form>
-			);
+			<input type="text" placeholder="Search shit talker...."  ref="search" onChange={this.Search} />
+			</div>
+		);
 	}
 });
 
