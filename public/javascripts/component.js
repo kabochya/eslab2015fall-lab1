@@ -170,7 +170,7 @@ class PostList extends React.Component {
 		} 
 		var postNodes = allData.map( function(post) {
 			return (
-				<Post postdata={post} />
+				<Post postdata={post} key={post._id} />
 				);
 		});
 		postNodes.reverse();	
